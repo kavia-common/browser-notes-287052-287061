@@ -3,6 +3,7 @@ import './App.css';
 import Header from './components/Header';
 import NoteForm from './components/NoteForm';
 import NotesList from './components/NotesList';
+import Sidebar from './components/Sidebar';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 /**
@@ -11,6 +12,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
  * - theme (persisted to localStorage 'theme.v1' if available)
  * - notes CRUD lifecycle with persistence in localStorage under 'notes.v1'
  * - editing state
+ * - UI filters and search
  *
  * PUBLIC_INTERFACE
  */
@@ -30,6 +32,11 @@ function App() {
   // Notes state persisted to localStorage
   const [notes, setNotes] = useLocalStorage('notes.v1', []);
   const [editingId, setEditingId] = useState(null);
+
+  // UI state
+  const [search, setSearch] = useState('');
+  const [filterKey, setFilterKey] = useState('all'); // 'all' | 'favorites' (favorites disabled for now)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const editingNote = useMemo(
     () => notes.find((n) => n.id === editingId) || null,
@@ -90,15 +97,62 @@ function App() {
     }
   };
 
+  // Derived filtered notes based on search and filters
+  const filteredNotes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = notes;
+
+    // Filter: favorites (currently not implemented; keep all for 'all', same for 'favorites')
+    if (filterKey === 'favorites') {
+      // Placeholder for future favorites; for now, no change
+      list = notes;
+    }
+
+    if (!q) return list;
+    return list.filter((n) => {
+      const t = (n.title || '').toLowerCase();
+      const c = (n.content || '').toLowerCase();
+      return t.includes(q) || c.includes(q);
+    });
+  }, [notes, search, filterKey]);
+
+  const handleAddNoteAction = () => {
+    setEditingId(null);
+    const formSection = document.querySelector('.note-form-section');
+    if (formSection) formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Focus title for quick entry
+    const titleInput = document.getElementById('note-title');
+    if (titleInput) titleInput.focus();
+  };
+
   return (
     <div className="App">
-      <Header theme={theme} onToggleTheme={toggleTheme} />
+      <Header
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        search={search}
+        onSearchChange={setSearch}
+      />
 
-      <main className="container" role="main">
-        <NoteForm initialNote={editingNote} onSave={handleSaveNote} onCancel={handleCancel} />
+      <div className="app-shell">
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          onAddNote={handleAddNoteAction}
+          filters={{
+            active: filterKey,
+            onSet: setFilterKey,
+          }}
+          tags={[]}
+        />
 
-        <NotesList notes={notes} onEdit={handleEdit} onDelete={handleDelete} />
-      </main>
+        <main className="content" role="main">
+          <section className="container">
+            <NoteForm initialNote={editingNote} onSave={handleSaveNote} onCancel={handleCancel} />
+            <NotesList notes={filteredNotes} onEdit={handleEdit} onDelete={handleDelete} />
+          </section>
+        </main>
+      </div>
 
       <footer className="app-footer" role="contentinfo" aria-label="Footer">
         <small>Browser-only Notes • Data stored locally in your browser</small>
